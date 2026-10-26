@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leaderboard Paper Trading</title>
+<style>
+:root{
+  --bg:#f7f7f5; --surface:#fff; --text:#1a1a1a; --sub:#6b6b6b; --border:#e3e2de;
+  --accent:#b45309; --accent2:#1d4ed8; --good:#16794f; --bad:#b42318; --gold:#f5d78a; --silver:#e2e2e2; --bronze:#eac7a0;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15140f; --surface:#211f19; --text:#efece4; --sub:#a39d8c; --border:#39362c;
+    --accent:#e0a94e; --accent2:#7aa2ff; --good:#4fd39a; --bad:#ff8a7a; --gold:#5c4a1c; --silver:#3a3a3a; --bronze:#4a3826;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15140f; --surface:#211f19; --text:#efece4; --sub:#a39d8c; --border:#39362c;
+  --accent:#e0a94e; --accent2:#7aa2ff; --good:#4fd39a; --bad:#ff8a7a; --gold:#5c4a1c; --silver:#3a3a3a; --bronze:#4a3826;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+header{position:sticky; top:0; z-index:10; background:var(--surface); border-bottom:1px solid var(--border); padding:14px 16px calc(14px); padding-top:calc(14px + env(safe-area-inset-top,0px));}
+header h1{margin:0 0 2px; font-size:17px}
+header p{margin:0; font-size:12.5px; color:var(--sub)}
+.wrap{max-width:1000px; margin:0 auto; padding:16px;}
+.tabs{display:flex; gap:6px; margin:14px 0; flex-wrap:wrap;}
+.tab{padding:7px 14px; border-radius:20px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; cursor:pointer;}
+.tab.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+.card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;}
+.card h2{font-size:14.5px; margin:0 0 4px;}
+.card .desc{font-size:12.5px; color:var(--sub); margin:0 0 12px;}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;}
+label{font-size:12.5px; color:var(--sub);}
+input[type=number], input[type=text]{
+  background:var(--bg); border:1px solid var(--border); color:var(--text);
+  border-radius:7px; padding:6px 8px; font-size:13px; width:64px;
+}
+input[type=text]{width:120px;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+.scrollx{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+th,td{padding:7px 8px; text-align:center; border-bottom:1px solid var(--border); white-space:nowrap;}
+th{color:var(--sub); font-weight:600; position:sticky; top:0; background:var(--surface);}
+td.name, th.name{text-align:left; position:sticky; left:0; background:var(--surface);}
+.chk{transform:scale(1.1);}
+.score-cell input{width:46px;}
+.pill{display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;}
+.rank1{background:var(--gold);} .rank2{background:var(--silver);} .rank3{background:var(--bronze);}
+.final{font-weight:700;}
+.good{color:var(--good);} .bad{color:var(--bad);}
+.footer-note{font-size:11.5px; color:var(--sub); margin-top:8px; line-height:1.5;}
+.reset{font-size:11.5px; color:var(--bad); background:none; border:none; cursor:pointer; text-decoration:underline; padding:0;}
+.weektabs{display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;}
+.wtab{padding:5px 11px; border-radius:16px; border:1px solid var(--border); background:var(--bg); font-size:12px; cursor:pointer; color:var(--text);}
+.wtab.active{background:var(--accent2); color:#fff; border-color:var(--accent2);}
+.na{color:var(--sub); font-style:italic;}
+.sync{font-size:11px; margin-left:4px;}
+.sync.ok{color:var(--good);} .sync.saving{color:var(--sub);} .sync.err{color:var(--bad);}
+select{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:5px 7px; font-size:12.5px;}
+</style>
+</head>
+<body>
+<header><div class="wrap" style="padding:0;">
+  <h1>📊 Leaderboard Internal Paper Trading</h1>
+  <p>Nilai Akhir = 0.70 × Nilai Trade Plan + 0.30 × Nilai P&amp;L — otomatis dari skor manual panitia <span id="syncStatus" class="sync"></span></p>
+</div></header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab active" data-view="plan">Input Trade Plan</button>
+    <button class="tab" data-view="pnl">Input P&amp;L (Equity)</button>
+    <button class="tab" data-view="board">🏆 Leaderboard</button>
+    <button class="tab" data-view="setup">⚙️ Setup</button>
+  </div>
+
+  <div id="view-setup" class="card" style="display:none">
+    <h2>Setup Kelompok &amp; Minggu</h2>
+    <div class="row">
+      <label>Jumlah kelompok (N)<br><input type="number" id="numGroups" min="2" max="40"></label>
+      <label>Jumlah minggu<br><input type="number" id="numWeeks" min="1" max="12"></label>
+    </div>
+    <div class="row">
+      <label style="flex:1; min-width:260px;">URL Web App Google Sheets (opsional, lihat README)<br>
+        <input type="text" id="sheetUrlInput" style="width:100%; max-width:480px;" placeholder="https://script.google.com/macros/s/.../exec">
+      </label>
+      <button class="reset" id="applySheetUrl" style="color:var(--accent2)">Terapkan &amp; muat data</button>
+    </div>
+    <div class="scrollx">
+      <table><thead><tr><th>#</th><th class="name">Nama Kelompok</th></tr></thead><tbody id="groupNameBody"></tbody></table>
+    </div>
+    <p class="footer-note">Ubah nama kelompok sesuai daftar. Data tersimpan otomatis di browser ini (localStorage).</p>
+    <button class="reset" id="resetBtn">Reset semua data</button>
+  </div>
+
+  <div id="view-plan" class="card" style="display:none">
+    <h2>Nilai Trade Plan — skor 1–4 per kriteria</h2>
+    <p class="desc">4 = jelas &amp; konsisten · 3 = baik · 2 = umum, minim pendukung · 1 = tidak relevan/tidak ada. Centang "Tidak Sah" bila plan tidak dikumpulkan/tidak sah (otomatis nilai 0 minggu itu).</p>
+    <div class="weektabs" id="weekTabsPlan"></div>
+    <div class="scrollx">
+      <table><thead><tr>
+        <th class="name">Kelompok</th>
+        <th>Emiten &amp;<br>Katalis</th>
+        <th>Setup<br>Teknikal</th>
+        <th>Level &amp;<br>Bobot</th>
+        <th>Kepatuhan</th>
+        <th>Tidak<br>Sah</th>
+        <th>Nilai<br>Minggu Ini</th>
+      </tr></thead><tbody id="planBody"></tbody></table>
+    </div>
+  </div>
+
+  <div id="view-pnl" class="card" style="display:none">
+    <h2>Nilai P&amp;L — Equity Akhir per Kelompok</h2>
+    <p class="desc">Masukkan equity akhir kumulatif (Rp) tiap kelompok pada akhir program (atau akhir minggu berjalan). Modal awal Rp5.000.000. Ranking &amp; nilai P&amp;L dihitung otomatis.</p>
+    <div class="scrollx">
+      <table><thead><tr>
+        <th class="name">Kelompok</th>
+        <th>Equity Akhir (Rp)</th>
+        <th>P&amp;L %</th>
+        <th>Peringkat</th>
+        <th>Nilai P&amp;L</th>
+      </tr></thead><tbody id="pnlBody"></tbody></table>
+    </div>
+  </div>
+
+  <div id="view-board" class="card" style="display:none">
+    <h2>🏆 Leaderboard Akhir</h2>
+    <p class="desc">Juara 1–3 berdasarkan Nilai Akhir tertinggi. Jika seri: Nilai Trade Plan → Nilai P&amp;L.</p>
+    <div class="scrollx">
+      <table><thead><tr>
+        <th>Rank</th><th class="name">Kelompok</th>
+        <th>Nilai Trade Plan<br>(70%)</th>
+        <th>Nilai P&amp;L<br>(30%)</th>
+        <th>Nilai Akhir</th>
+      </tr></thead><tbody id="boardBody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== KONFIGURASI GOOGLE SHEETS (opsional) ======
+// Bisa diisi langsung di sini (dipakai semua orang yang buka file ini), ATAU
+// tiap orang bisa isi sendiri lewat tab Setup (tersimpan per-browser).
+const SHEET_URL_DEFAULT = "";
+let SHEET_URL = localStorage.getItem("ptb_sheet_url") || SHEET_URL_DEFAULT;
+// ====================================================
+
+const LS_KEY = "ptb_leaderboard_v1";
+function defaultState(){
+  const numGroups = 14, numWeeks = 3;
+  const groups = Array.from({length:numGroups}, (_,i)=>({id:i+1, name:"Grup "+String(i+1).padStart(2,"0")}));
+  const plan = {}; // week -> groupId -> {k1,k2,k3,k4,tidakSah}
+  const pnl = {}; // groupId -> equity
+  return {numGroups, numWeeks, groups, plan, pnl};
+}
+let state;
+try{
+  const raw = localStorage.getItem(LS_KEY);
+  state = raw ? JSON.parse(raw) : defaultState();
+}catch(e){ state = defaultState(); }
+
+let saveTimer = null;
+function setSyncStatus(txt, cls){
+  const el = document.getElementById("syncStatus");
+  if(!el) return;
+  el.textContent = txt;
+  el.className = "sync " + (cls||"");
+}
+
+function save(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){}
+  if(!SHEET_URL) return;
+  setSyncStatus("Menyimpan…","saving");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    fetch(SHEET_URL, {
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"}, // hindari CORS preflight
+      body: JSON.stringify(state)
+    }).then(r=>r.json()).then(r=>{
+      setSyncStatus(r && r.ok ? "Tersimpan ✓" : "Gagal menyimpan", r && r.ok ? "ok" : "err");
+    }).catch(()=>{ setSyncStatus("Gagal menyimpan (offline?)","err"); });
+  }, 700);
+}
+
+function loadFromSheet(){
+  if(!SHEET_URL) return;
+  setSyncStatus("Memuat data…","saving");
+  fetch(SHEET_URL).then(r=>r.json()).then(remote=>{
+    if(remote && remote.groups){
+      state = remote;
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){}
+      renderAll();
+    }
+    setSyncStatus("Tersinkron ✓","ok");
+  }).catch(()=>{ setSyncStatus("Gagal memuat, pakai data lokal","err"); });
+}
+
+function ensureGroupCount(){
+  const n = state.numGroups;
+  while(state.groups.length < n){
+    const idx = state.groups.length+1;
+    state.groups.push({id: idx, name: "Grup "+String(idx).padStart(2,"0")});
+  }
+  state.groups = state.groups.slice(0, n);
+}
+
+let currentPlanWeek = 1;
+
+function getPlanEntry(week, gid){
+  state.plan[week] = state.plan[week] || {};
+  state.plan[week][gid] = state.plan[week][gid] || {k1:null,k2:null,k3:null,k4:null,tidakSah:false};
+  return state.plan[week][gid];
+}
+
+function weekPlanScore(week, gid){
+  const e = getPlanEntry(week, gid);
+  if(e.tidakSah) return 0;
+  const vals = [e.k1,e.k2,e.k3,e.k4].filter(v=>v!==null && v!=="" && !isNaN(v)).map(Number);
+  if(vals.length < 4) return null; // incomplete
+  const avg = vals.reduce((a,b)=>a+b,0)/4;
+  return (avg-1)/3*100;
+}
+
+function groupTradePlanFinal(gid){
+  const scores = [];
+  for(let w=1; w<=state.numWeeks; w++){
+    const s = weekPlanScore(w, gid);
+    if(s !== null) scores.push(s);
+  }
+  if(scores.length===0) return null;
+  return scores.reduce((a,b)=>a+b,0)/scores.length;
+}
+
+function computePnl(){
+  const N = state.groups.length;
+  const rows = state.groups.map(g=>{
+    const equity = state.pnl[g.id];
+    const hasEquity = equity !== undefined && equity !== null && equity !== "" && !isNaN(equity);
+    const pct = hasEquity ? (Number(equity)-5000000)/5000000 : null;
+    return {gid:g.id, name:g.name, equity: hasEquity?Number(equity):null, pct};
+  });
+  const withPct = rows.filter(r=>r.pct!==null).sort((a,b)=>b.pct-a.pct);
+  withPct.forEach((r,i)=>{ r.rank = i+1; });
+  rows.forEach(r=>{
+    const found = withPct.find(x=>x.gid===r.gid);
+    r.rank = found ? found.rank : null;
+    r.nilaiPnl = (r.rank && N>1) ? (N-r.rank)/(N-1)*100 : null;
+  });
+  return rows;
+}
+
+function fmtNum(v, d=1){ return v===null || v===undefined || isNaN(v) ? "—" : v.toFixed(d); }
+function fmtRp(v){ return v===null||v===undefined?"":Number(v).toLocaleString("id-ID"); }
+
+function renderSetup(){
+  document.getElementById("numGroups").value = state.numGroups;
+  document.getElementById("numWeeks").value = state.numWeeks;
+  document.getElementById("sheetUrlInput").value = SHEET_URL;
+  const body = document.getElementById("groupNameBody");
+  body.innerHTML = "";
+  state.groups.forEach((g,i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${g.id}</td><td class="name"><input type="text" data-gid="${g.id}" class="gname" value="${g.name.replace(/"/g,'&quot;')}"></td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll(".gname").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const gid = Number(e.target.dataset.gid);
+      const g = state.groups.find(x=>x.id===gid);
+      if(g){ g.name = e.target.value; save(); renderAll(); }
+    });
+  });
+}
+
+function renderWeekTabs(){
+  const wrap = document.getElementById("weekTabsPlan");
+  wrap.innerHTML = "";
+  for(let w=1; w<=state.numWeeks; w++){
+    const b = document.createElement("button");
+    b.className = "wtab" + (w===currentPlanWeek ? " active":"");
+    b.textContent = "Minggu "+w;
+    b.addEventListener("click", ()=>{ currentPlanWeek = w; renderPlan(); });
+    wrap.appendChild(b);
+  }
+}
+
+function renderPlan(){
+  // Membangun ulang seluruh baris (dipakai saat ganti tab minggu / jumlah kelompok berubah).
+  renderWeekTabs();
+  const body = document.getElementById("planBody");
+  body.innerHTML = "";
+  state.groups.forEach(g=>{
+    const e = getPlanEntry(currentPlanWeek, g.id);
+    const tr = document.createElement("tr");
+    tr.dataset.gid = g.id;
+    tr.innerHTML = `
+      <td class="name">${g.name}</td>
+      <td class="score-cell"><input type="number" min="1" max="4" step="1" inputmode="numeric" data-k="k1" data-gid="${g.id}" value="${e.k1??""}" ${e.tidakSah?"disabled":""}></td>
+      <td class="score-cell"><input type="number" min="1" max="4" step="1" inputmode="numeric" data-k="k2" data-gid="${g.id}" value="${e.k2??""}" ${e.tidakSah?"disabled":""}></td>
+      <td class="score-cell"><input type="number" min="1" max="4" step="1" inputmode="numeric" data-k="k3" data-gid="${g.id}" value="${e.k3??""}" ${e.tidakSah?"disabled":""}></td>
+      <td class="score-cell"><input type="number" min="1" max="4" step="1" inputmode="numeric" data-k="k4" data-gid="${g.id}" value="${e.k4??""}" ${e.tidakSah?"disabled":""}></td>
+      <td><input type="checkbox" class="chk" data-tidaksah="${g.id}" ${e.tidakSah?"checked":""}></td>
+      <td class="week-score-cell na">—</td>
+    `;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll("input[type=number]").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const gid = Number(e.target.dataset.gid), k = e.target.dataset.k;
+      let v = e.target.value;
+      if(v!=="" ){ v = Math.max(1, Math.min(4, Number(v))); }
+      const entry = getPlanEntry(currentPlanWeek, gid);
+      entry[k] = v===""?null:v;
+      save();
+      updatePlanComputedCells(); // hanya refresh kolom nilai, bukan input-nya
+      renderBoard();
+    });
+  });
+  body.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+    cb.addEventListener("change", e=>{
+      const gid = Number(e.target.dataset.tidaksah);
+      const entry = getPlanEntry(currentPlanWeek, gid);
+      entry.tidakSah = e.target.checked;
+      save(); renderPlan(); renderBoard(); // checkbox mengubah disabled state input -> rebuild penuh ok
+    });
+  });
+  updatePlanComputedCells();
+}
+
+function updatePlanComputedCells(){
+  const body = document.getElementById("planBody");
+  state.groups.forEach(g=>{
+    const tr = body.querySelector(`tr[data-gid="${g.id}"]`);
+    if(!tr) return;
+    const cell = tr.querySelector(".week-score-cell");
+    const score = weekPlanScore(currentPlanWeek, g.id);
+    cell.textContent = score===null ? "belum lengkap" : fmtNum(score,1);
+    cell.className = "week-score-cell " + (score===0?'bad':score!==null?'good':'na');
+  });
+}
+
+function renderPnl(){
+  // Membangun ulang seluruh baris (dipakai saat ganti tab / jumlah kelompok berubah).
+  const body = document.getElementById("pnlBody");
+  body.innerHTML = "";
+  state.groups.forEach(g=>{
+    const tr = document.createElement("tr");
+    tr.dataset.gid = g.id;
+    tr.innerHTML = `
+      <td class="name">${g.name}</td>
+      <td><input type="number" step="1000" inputmode="numeric" data-gid="${g.id}" value="${state.pnl[g.id]??""}"></td>
+      <td class="pct-cell na">—</td>
+      <td class="rank-cell">—</td>
+      <td class="score-cell2 na">—</td>
+    `;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll("input[type=number]").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const gid = Number(e.target.dataset.gid);
+      state.pnl[gid] = e.target.value===""? null : Number(e.target.value);
+      save();
+      updatePnlComputedCells(); // hanya refresh kolom hasil, bukan input-nya
+      renderBoard();
+    });
+  });
+  updatePnlComputedCells();
+}
+
+function updatePnlComputedCells(){
+  const body = document.getElementById("pnlBody");
+  const computed = computePnl();
+  computed.forEach(row=>{
+    const tr = body.querySelector(`tr[data-gid="${row.gid}"]`);
+    if(!tr) return;
+    const pctCell = tr.querySelector(".pct-cell");
+    const rankCell = tr.querySelector(".rank-cell");
+    const scoreCell = tr.querySelector(".score-cell2");
+    pctCell.textContent = row.pct===null ? "—" : (row.pct*100).toFixed(2)+"%";
+    pctCell.className = "pct-cell " + (row.pct===null?'na':(row.pct>=0?'good':'bad'));
+    rankCell.textContent = row.rank ?? "—";
+    scoreCell.textContent = fmtNum(row.nilaiPnl,1);
+    scoreCell.className = "score-cell2 " + (row.nilaiPnl===null?'na':'');
+  });
+}
+
+function renderBoard(){
+  const pnlComputed = computePnl();
+  const rows = state.groups.map(g=>{
+    const tp = groupTradePlanFinal(g.id);
+    const pr = pnlComputed.find(r=>r.gid===g.id);
+    const pnlScore = pr ? pr.nilaiPnl : null;
+    const final = (tp!==null && pnlScore!==null) ? 0.7*tp + 0.3*pnlScore : null;
+    return {name:g.name, tp, pnlScore, final};
+  });
+  rows.sort((a,b)=>{
+    if(a.final===null && b.final===null) return 0;
+    if(a.final===null) return 1;
+    if(b.final===null) return -1;
+    if(b.final!==a.final) return b.final-a.final;
+    if((b.tp??0)!==(a.tp??0)) return (b.tp??0)-(a.tp??0);
+    return (b.pnlScore??0)-(a.pnlScore??0);
+  });
+  const body = document.getElementById("boardBody");
+  body.innerHTML = "";
+  rows.forEach((r,i)=>{
+    const rankClass = i===0?"rank1":i===1?"rank2":i===2?"rank3":"";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><span class="pill ${rankClass}">${i+1}</span></td>
+      <td class="name">${r.name}</td>
+      <td class="${r.tp===null?'na':''}">${fmtNum(r.tp,1)}</td>
+      <td class="${r.pnlScore===null?'na':''}">${fmtNum(r.pnlScore,1)}</td>
+      <td class="final ${r.final===null?'na':''}">${fmtNum(r.final,1)}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderAll(){
+  ensureGroupCount();
+  renderSetup();
+  renderPlan();
+  renderPnl();
+  renderBoard();
+}
+
+document.querySelectorAll(".tab").forEach(t=>{
+  t.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    ["setup","plan","pnl","board"].forEach(v=>{
+      document.getElementById("view-"+v).style.display = (v===t.dataset.view) ? "" : "none";
+    });
+  });
+});
+document.getElementById("view-plan").style.display = "";
+
+document.getElementById("numGroups").addEventListener("input", e=>{
+  const v = Math.max(2, Math.min(40, Number(e.target.value)||2));
+  state.numGroups = v; save(); renderAll();
+});
+document.getElementById("numWeeks").addEventListener("input", e=>{
+  const v = Math.max(1, Math.min(12, Number(e.target.value)||1));
+  state.numWeeks = v; if(currentPlanWeek>v) currentPlanWeek=1; save(); renderAll();
+});
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  if(confirm("Yakin reset semua data skor dan equity?")){
+    state = defaultState(); save(); renderAll();
+  }
+});
+
+document.getElementById("applySheetUrl").addEventListener("click", ()=>{
+  const v = document.getElementById("sheetUrlInput").value.trim();
+  SHEET_URL = v;
+  try{ localStorage.setItem("ptb_sheet_url", v); }catch(e){}
+  if(v) loadFromSheet();
+  else setSyncStatus("", "");
+});
+
+renderAll();
+loadFromSheet(); // no-op kalau SHEET_URL kosong
+</script>
+</body>
+</html>
